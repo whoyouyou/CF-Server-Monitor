@@ -234,7 +234,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import TerminalHeader from '../components/TerminalHeader.vue'
 import Footer from '../components/Footer.vue'
-import { fetchServerDetail, fetchAllHistory, fetchAggHistory, formatBytes, fetchConfig } from '../utils/api'
+import { fetchServerDetail, fetchAllHistory, formatBytes, fetchConfig } from '../utils/api'
 import Chart from 'chart.js/auto'
 import 'chartjs-adapter-date-fns'
 import { t, currentLang } from '../utils/i18n'
@@ -646,8 +646,7 @@ const updateLoadChart = (chart, dataPoints) => {
     }
 
     processedData = sampledData.map(d => {
-      // 优先使用 load_avg，如果没有则尝试 load_avg_avg（聚合数据）
-      const loadVal = d.load_avg || d.load_avg_avg || '0 0 0'
+      const loadVal = d.load_avg || '0 0 0'
       const loads = parseLoadAvg(loadVal)
       return { 
         x: new Date(d.timestamp).getTime(), 
@@ -672,83 +671,11 @@ const updateLoadChart = (chart, dataPoints) => {
   chart.update('none')
 }
 
-const mergeDataSets = (rawData, aggData) => {
-  if (!rawData || rawData.length === 0) return aggData || []
-  if (!aggData || aggData.length === 0) return rawData
-
-  const ONE_HOUR_MS = 60 * 60 * 1000
-  const oneHourAgo = Date.now() - ONE_HOUR_MS
-  const sortedRaw = [...rawData].sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
-  const sortedAgg = [...aggData].sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
-
-  const recentRaw = sortedRaw.filter(d => Number(d.timestamp) >= oneHourAgo)
-  const olderRaw = sortedRaw.filter(d => Number(d.timestamp) < oneHourAgo)
-
-  const aggInterval = calculateAvgInterval(sortedAgg)
-  const rawInterval = calculateAvgInterval(recentRaw)
-
-  let processedRaw = recentRaw
-  if (aggInterval > rawInterval * 1.5 && recentRaw.length > 10) {
-    const targetInterval = Math.max(aggInterval * 0.8, rawInterval * 2)
-    processedRaw = sampleDataByInterval(recentRaw, targetInterval)
-  }
-
-  const map = new Map()
-  for (const item of olderRaw) map.set(Number(item.timestamp), item)
-  for (const item of sortedAgg) map.set(Number(item.timestamp), item)
-  for (const item of processedRaw) map.set(Number(item.timestamp), item)
-
-  const result = Array.from(map.values())
-  result.sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
-  return result
-}
-
-const calculateAvgInterval = (data) => {
-  if (!data || data.length < 2) return 60000
-  let total = 0, count = 0
-  for (let i = 1; i < data.length; i++) {
-    const diff = Number(data[i].timestamp) - Number(data[i - 1].timestamp)
-    if (diff > 0) { total += diff; count++; }
-  }
-  return count > 0 ? total / count : 60000
-}
-
-const sampleDataByInterval = (data, targetInterval) => {
-  if (!data || data.length <= 1) return data
-  const result = []
-  let lastTs = -Infinity
-  for (const item of data) {
-    const ts = Number(item.timestamp)
-    if (ts - lastTs >= targetInterval) {
-      result.push(item)
-      lastTs = ts
-    }
-  }
-  return result
-}
-
 const loadAllHistory = async (hours) => {
   try {
-    let allData
-
-    if (hours <= 1) {
-      const res = await fetchAllHistory(serverId, hours)
-      if (!res) return
-      allData = res
-      oneHourDataCache.value = allData
-    } else {
-      if (!oneHourDataCache.value) {
-        const oneHourRes = await fetchAllHistory(serverId, 1)
-        if (oneHourRes) {
-          oneHourDataCache.value = oneHourRes
-        }
-      }
-
-      const aggRes = await fetchAggHistory(serverId, hours)
-      if (!aggRes) return
-
-      allData = mergeDataSets(oneHourDataCache.value, aggRes)
-    }
+    const res = await fetchAllHistory(serverId, hours)
+    if (!res) return
+    const allData = res
 
     updateChartDataset(charts.cpu, 0, allData, 'timestamp', 'cpu')
     updateChartDataset(charts.ram, 0, allData, 'timestamp', 'ram')

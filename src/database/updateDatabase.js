@@ -12,9 +12,6 @@ export async function updateDatabase(db) {
     const historyCols = await addHistoryColumns(db);
     results.push({ name: 'metrics_history 表列更新', ...historyCols });
     
-    const aggType = await modifyAggregatedLoadAvgType(db);
-    results.push({ name: 'metrics_aggregated load_avg_avg 类型修改', ...aggType });
-    
     const staleCleanup = await cleanupStaleSettings(db);
     results.push({ name: '废弃 settings key 清理', ...staleCleanup });
     
@@ -117,82 +114,6 @@ async function addHistoryColumns(db) {
   }
 }
 
-async function modifyAggregatedLoadAvgType(db) {
-  try {
-    const { results: aggColumns } = await db.prepare(`PRAGMA table_info(metrics_aggregated)`).all();
-    const loadAvgAvgCol = aggColumns.find(c => c.name === 'load_avg_avg');
-    
-    if (!loadAvgAvgCol || loadAvgAvgCol.type === 'TEXT') {
-      return { success: true, modified: false, message: '无需修改（列已为 TEXT 类型或不存在）' };
-    }
-    
-    await db.prepare(`
-      CREATE TABLE metrics_aggregated_temp (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        server_id TEXT NOT NULL,
-        bucket INTEGER NOT NULL,
-        bucket_size INTEGER NOT NULL,
-        cpu_avg REAL DEFAULT 0,
-        cpu_max REAL DEFAULT 0,
-        ram_avg REAL DEFAULT 0,
-        ram_max REAL DEFAULT 0,
-        disk_avg REAL DEFAULT 0,
-        disk_max REAL DEFAULT 0,
-        load_avg_avg TEXT DEFAULT '0',
-        net_in_speed_avg REAL DEFAULT 0,
-        net_out_speed_avg REAL DEFAULT 0,
-        net_rx_avg REAL DEFAULT 0,
-        net_tx_avg REAL DEFAULT 0,
-        processes_avg REAL DEFAULT 0,
-        tcp_conn_avg REAL DEFAULT 0,
-        udp_conn_avg REAL DEFAULT 0,
-        ping_ct_avg REAL DEFAULT 0,
-        ping_cu_avg REAL DEFAULT 0,
-        ping_cm_avg REAL DEFAULT 0,
-        ping_bd_avg REAL DEFAULT 0,
-        ram_total_avg REAL DEFAULT 0,
-        ram_used_avg REAL DEFAULT 0,
-        swap_total_avg REAL DEFAULT 0,
-        swap_used_avg REAL DEFAULT 0,
-        disk_total_avg REAL DEFAULT 0,
-        disk_used_avg REAL DEFAULT 0,
-        FOREIGN KEY (server_id) REFERENCES servers(id),
-        UNIQUE(server_id, bucket, bucket_size)
-      )
-    `).run();
-    
-    await db.prepare(`
-      INSERT INTO metrics_aggregated_temp (
-        id, server_id, bucket, bucket_size,
-        cpu_avg, cpu_max, ram_avg, ram_max, disk_avg, disk_max,
-        load_avg_avg, net_in_speed_avg, net_out_speed_avg,
-        net_rx_avg, net_tx_avg, processes_avg, tcp_conn_avg, udp_conn_avg,
-        ping_ct_avg, ping_cu_avg, ping_cm_avg, ping_bd_avg,
-        ram_total_avg, ram_used_avg, swap_total_avg, swap_used_avg,
-        disk_total_avg, disk_used_avg
-      )
-      SELECT 
-        id, server_id, bucket, bucket_size,
-        cpu_avg, cpu_max, ram_avg, ram_max, disk_avg, disk_max,
-        CAST(load_avg_avg AS TEXT), net_in_speed_avg, net_out_speed_avg,
-        net_rx_avg, net_tx_avg, processes_avg, tcp_conn_avg, udp_conn_avg,
-        ping_ct_avg, ping_cu_avg, ping_cm_avg, ping_bd_avg,
-        ram_total_avg, ram_used_avg, swap_total_avg, swap_used_avg,
-        disk_total_avg, disk_used_avg
-      FROM metrics_aggregated
-    `).run();
-    
-    await db.prepare(`DROP TABLE metrics_aggregated`).run();
-    await db.prepare(`ALTER TABLE metrics_aggregated_temp RENAME TO metrics_aggregated`).run();
-    
-    console.log('✅ 已成功修改 metrics_aggregated 表的 load_avg_avg 列为 TEXT 类型');
-    return { success: true, modified: true, message: '已修改为 TEXT 类型' };
-  } catch (e) {
-    console.error('修改 metrics_aggregated 表失败:', e);
-    return { success: false, error: e.message };
-  }
-}
-
 export async function cleanupStaleSettings(db) {
   console.log('开始清理废弃的 settings key...');
   try {
@@ -218,7 +139,9 @@ export async function cleanupStaleSettings(db) {
       'show_tf',
       'tg_notify',
       'tg_bot_token',
-      'tg_chat_id'
+      'tg_chat_id',
+      'last_aggregated_to',
+      'last_cleanup'
     ];
     const staleKeysWhere = stalePrefixes.map(() => `key LIKE ?`).concat(staleExact.map(() => `key = ?`)).join(' OR ');
     const staleBindings = [...stalePrefixes, ...staleExact];

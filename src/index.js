@@ -1,4 +1,4 @@
-import { initDatabase, cleanupOldData, getMetricsHistory, getAggregatedHistory } from './database/schema.js';
+import { initDatabase, cleanupOldData, getMetricsHistory } from './database/schema.js';
 import { checkOfflineNodes } from './services/notification.js';
 import { updateDatabase, cleanupStaleSettings } from './database/updateDatabase.js';
 import { handleAdminAPI } from './handlers/admin.js';
@@ -21,7 +21,6 @@ async function fetchHistoryData(env, request, id, hours, columns) {
   const enableLongRetention = env.LONG_RETENTION === 'true';
   const maxHours = enableLongRetention ? MAX_HOURS_LONG : MAX_HOURS_SHORT;
   
-  // 如果关闭了公开访问，需要登录
   if (sys.is_public !== 'true' && !isLoggedIn) {
     return simpleAuthResponse();
   }
@@ -42,48 +41,7 @@ async function fetchHistoryData(env, request, id, hours, columns) {
     });
   }
   
-  const data = await getMetricsHistory(env.DB, id, clampedHours, columns, enableLongRetention);
-  
-  historyCache.set(cacheKey, {
-    timestamp: Date.now(),
-    data: data
-  });
-  
-  return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json', 'X-Cache': 'MISS' }
-  });
-}
-
-async function fetchAggregatedHistoryData(env, request, id, hours, columns) {
-  if (!id) return new Response('Missing ID', { status: 400 });
-  
-  const isLoggedIn = checkAuth(request, env);
-  const sys = await loadSettings(env.DB);
-  const enableLongRetention = env.LONG_RETENTION === 'true';
-  const maxHours = enableLongRetention ? MAX_HOURS_LONG : MAX_HOURS_SHORT;
-  
-  // 如果关闭了公开访问，需要登录
-  if (sys.is_public !== 'true' && !isLoggedIn) {
-    return simpleAuthResponse();
-  }
-  let query = 'SELECT id FROM servers WHERE id = ?';
-  if (!isLoggedIn) {
-    query += " AND (is_hidden != '1' AND is_hidden != 1)";
-  }
-  const server = await env.DB.prepare(query).bind(id).first();
-  if (!server) return new Response('Not Found', { status: 404 });
-  
-  const clampedHours = Math.min(hours, maxHours);
-  
-  const cacheKey = `agg_${id}_${clampedHours}_${columns}`;
-  const cached = historyCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return new Response(JSON.stringify(cached.data), {
-      headers: { 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
-    });
-  }
-  
-  const data = await getAggregatedHistory(env.DB, id, clampedHours, columns, enableLongRetention);
+  const data = await getMetricsHistory(env.DB, id, clampedHours, columns);
   
   historyCache.set(cacheKey, {
     timestamp: Date.now(),
@@ -103,7 +61,6 @@ export default {
     const method = request.method;
     const path = url.pathname;
 
-    // 首先尝试通过 ASSETS 提供静态资源
     if (env.ASSETS && method === 'GET') {
       try {
         const res = await env.ASSETS.fetch(new Request(`http://static${path}`, request));
@@ -111,7 +68,6 @@ export default {
           return res;
         }
       } catch (e) {
-        // 忽略错误，继续路由处理
       }
     }
 
@@ -121,8 +77,7 @@ export default {
         return authResponse(sys.admin_title);
       }
       
-      const enableLongRetention = env.LONG_RETENTION === 'true';
-      const result = await cleanupOldData(env.DB, enableLongRetention, true);
+      const result = await cleanupOldData(env.DB);
       
       return new Response(JSON.stringify(result), {
         headers: { 'Content-Type': 'application/json' }
@@ -177,12 +132,6 @@ export default {
         const hours = parseFloat(url.searchParams.get('hours') || '24');
         const allColumns = 'cpu, ram, disk, processes, net_in_speed, net_out_speed, tcp_conn, udp_conn, ping_ct, ping_cu, ping_cm, ping_bd, swap_total, swap_used, load_avg';
         return fetchHistoryData(env, request, id, hours, allColumns);
-      }},
-      { method: 'GET', path: '/api/history/agg', handler: async () => {
-        const id = url.searchParams.get('id');
-        const hours = parseFloat(url.searchParams.get('hours') || '24');
-        const allColumns = 'cpu, ram, disk, processes, net_in_speed, net_out_speed, tcp_conn, udp_conn, ping_ct, ping_cu, ping_cm, ping_bd, swap_total, swap_used, load_avg_avg';
-        return fetchAggregatedHistoryData(env, request, id, hours, allColumns);
       }}
     ];
 
@@ -192,7 +141,6 @@ export default {
       }
     }
 
-    // 所有其他路由都返回 Vue SPA 页面
     return serveFrontend(request, env);
   },
 
@@ -202,11 +150,10 @@ export default {
     const cron = event.cron;
     console.log(`[Cron] 定时任务触发: ${cron}`);
     
-    if (cron === '10 * * * *') {
-      console.log('[Cron] 开始执行定时清理任务');
-      const enableLongRetention = env.LONG_RETENTION === 'true';
-      await cleanupOldData(env.DB, enableLongRetention);
-      console.log('[Cron] 定时清理任务完成');
+    if (cron === '10 0 * * *') {
+      console.log('[Cron] 开始执行每日数据清理任务');
+      await cleanupOldData(env.DB);
+      console.log('[Cron] 每日数据清理任务完成');
     } else if (cron === '*/1 * * * *') {
       console.log('[Cron] 开始执行离线节点检测');
       await checkOfflineNodes(env.DB);

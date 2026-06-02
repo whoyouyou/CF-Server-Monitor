@@ -76,18 +76,6 @@ export const fetchAllHistory = async (id, hours) => {
   return await res.json()
 }
 
-export const fetchAggHistory = async (id, hours) => {
-  const res = await fetch(`${API_BASE}/api/history/agg?id=${id}&hours=${hours}`, {
-    headers: getAuthHeader()
-  })
-  if (res.status === 401) {
-    window.location.href = '/admin'
-    return null
-  }
-  if (!res.ok) return null
-  return await res.json()
-}
-
 export const adminApi = async (data) => {
   const res = await fetch(`${API_BASE}/admin/api`, {
     method: 'POST',

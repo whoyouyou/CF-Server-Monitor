@@ -91,7 +91,6 @@ let sql = `-- CF Server Monitor 模拟数据
 
 -- 清空现有数据（注意顺序：先删子表，再删主表）
 DELETE FROM metrics_history;
-DELETE FROM metrics_aggregated;
 DELETE FROM servers;
 DELETE FROM settings;
 
@@ -120,7 +119,6 @@ const siteOptions = {
 sql += `INSERT INTO settings (key, value) VALUES ('appearance_options', '${JSON.stringify(appearanceOptions)}');\n`;
 sql += `INSERT INTO settings (key, value) VALUES ('site_options', '${JSON.stringify(siteOptions)}');\n`;
 sql += `INSERT INTO settings (key, value) VALUES ('last_cleanup', '${now.toString()}');\n`;
-sql += `INSERT INTO settings (key, value) VALUES ('last_aggregated_to', '${(now - 60 * 60 * 1000).toString()}');\n`;
 
 sql += `\n-- 插入服务器数据\n`;
 
