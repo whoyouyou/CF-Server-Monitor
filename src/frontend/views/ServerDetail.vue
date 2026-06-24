@@ -282,7 +282,7 @@ import Footer from '../components/Footer.vue'
 import { fetchServerDetail, fetchAllHistory, formatBytes, isAdminLoggedIn, createLiveSocket, getFlagRegionCode } from '../utils/api.js'
 import Chart from 'chart.js/auto'
 import 'chartjs-adapter-date-fns'
-import { currentLang, translations } from '../utils/i18n'
+import { t, currentLang, translations } from '../utils/i18n'
 import { TIME, CHART, GAP_BREAK } from '../utils/constants'
 import useTheme from '../composables/useTheme'
 
@@ -931,10 +931,10 @@ const loadAllHistory = async (hours) => {
       })
     })
   } catch (e) {
-    if (e && e.code === 'DATABASE_UPGRADE_REQUIRED') {
+    if (e && e.message === 'databaseUpgradeRequired') {
       if (!databaseUpgradeAlertShown) {
         databaseUpgradeAlertShown = true
-        alert(trans.value.databaseUpgradeRequired || e.message || 'Database schema is not upgraded. Please upgrade database in Admin Panel.')
+        alert(t(e.message))
       }
       return
     }

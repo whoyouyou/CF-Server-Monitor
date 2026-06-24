@@ -115,7 +115,7 @@ async function fetchHistoryData(env, request, id, hours, columns, sys = null) {
     if (/no such column/i.test(message)) {
       debug('[History] 数据库字段缺失，可能尚未升级数据库:', message);
       return new Response(JSON.stringify({
-        code: 'DATABASE_UPGRADE_REQUIRED'
+        message: 'databaseUpgradeRequired'
       }), {
         status: 409,
         headers: { 'Content-Type': 'application/json' }
@@ -258,7 +258,8 @@ export default {
         await ensureFullSettings();
         const id = url.searchParams.get('id');
         const hours = parseFloat(url.searchParams.get('hours') || '24');
-        const allColumns = 'cpu, gpu, gpu_info, ram, disk_total, disk_used, processes, net_in_speed, net_out_speed, tcp_conn, udp_conn, ping_ct, ping_cu, ping_cm, ping_bd, loss_ct, loss_cu, loss_cm, loss_bd, swap_total, swap_used, load_avg';
+        const allColumns = 'cpu, gpu, gpu_info, ram, disk_total, disk_used, processes, net_in_speed, net_out_speed, tcp_conn, udp_conn, ping_ct, ping_cu, ping_cm, ping_bd, loss_ct, loss_cu, loss_cm, loss_bd, swap_total, swap_used, load_avg, region';
+        // 后续版本可以删掉ram region 字段
         return fetchHistoryData(env, request, id, hours, allColumns, sys);
       }},
       { method: 'POST', path: '/admin/api', handler: async () => {
