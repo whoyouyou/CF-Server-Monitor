@@ -1,6 +1,6 @@
 # [CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor)
 
-一个基于 Cloudflare Workers + D1 + Durable Objects 的多服务器监控探针系统，支持实时监控、历史数据查看、延迟追踪、地图展示等功能。兼容主流 Linux 系统、Alpine Linux、OpenWrt、macOS（Intel / Apple Silicon）、Windows 系统。
+一个基于 Cloudflare Workers + D1 + Durable Objects 的多服务器监控探针系统，支持实时监控、历史数据查看、延迟追踪、地图展示等功能。兼容主流 Linux 系统、Alpine Linux、OpenWrt、macOS（Intel / Apple Silicon）、群晖、Windows 系统。
 
 **演示地址**：<https://demo.huilang.me/>
 

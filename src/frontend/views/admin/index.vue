@@ -1049,6 +1049,7 @@ const getUninstallCommand = () => {
   const script = deleteTargetOs.value === 'alpine' ? 'install-alpine.sh'
     : deleteTargetOs.value === 'openwrt' ? 'install-openwrt.sh'
     : deleteTargetOs.value === 'mac' ? 'install-mac.sh'
+    : deleteTargetOs.value === 'synology' ? 'install-synology.sh'
     : 'install.sh'
   return `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s uninstall`
 }
@@ -1101,6 +1102,7 @@ const getCustomInstallCommand = () => {
   const script = targetOs.value === 'alpine' ? 'install-alpine.sh'
     : targetOs.value === 'openwrt' ? 'install-openwrt.sh'
     : targetOs.value === 'mac' ? 'install-mac.sh'
+    : targetOs.value === 'synology' ? 'install-synology.sh'
     : 'install.sh'
   let cmd = `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s install -id=${copyServerId.value} -secret='${apiSecret.value}' -url=${HOST}/update -collect_interval=${collectInterval.value} -interval=${reportInterval.value} -reset_day=${resetDay.value ?? 1} -auto_update=${autoUpdateFlag}`
   if (customCt.value) cmd += ` -ct=${customCt.value}`
